@@ -1,2 +1,3 @@
 def engineer_features(X):
-  return X
+  X_new = X.copy()
+  return X_new
