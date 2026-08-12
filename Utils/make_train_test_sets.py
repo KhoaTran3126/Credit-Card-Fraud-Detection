@@ -1,4 +1,4 @@
-def main_train_test_sets(path:str, target_variable="is_fraud", test_size=0.3, random_state=3126):
+def make_train_test_sets(path:str, target_variable="is_fraud", test_size=0.3, random_state=3126):
   """
   Parameters:
     path (str): Path to the CSV file containing the dataset.
