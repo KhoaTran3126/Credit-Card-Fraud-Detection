@@ -9,13 +9,17 @@ def make_train_test_sets(path:str, target_variable="is_fraud", test_size=0.3, ra
         X_train, X_test, y_train, y_test: Stratified train/test split of features and target.
     """
     ## Reads data and splits into X and y 
-    df = pd.read_csv(path)
-    X = df.copy()
-    y = X.pop(target_variable)
-
+    X  = pd.read_csv(path).drop(columns=["transaction_id"])
+    y  = X.pop(target_variable)
+    
     ## Splits intro train and test sets
     X_train, X_test, y_train, y_test = train_test_split(
       X, y, test_size=test_size, random_state=random_state, shuffle=True, stratify=y
     )
-
+    ## Reset indices after splitting
+    X_train = X_train.reset_index(drop=True)
+    y_train = y_train.reset_index(drop=True)
+    X_test  = X_test.reset_index(drop=True)
+    y_test  = y_test.reset_index(drop=True)
+    
     return X_train, X_test, y_train, y_test
