@@ -1,5 +1,5 @@
-def test_model(model, model_name, X_test, y_test, scorer):
-  """
+def test_model(model, model_name, X_test, y_test, scorer=average_precision_score):
+    """
     Evaluate a trained classifier on a test set using probability-based scoring
     and print the result.
 
@@ -9,9 +9,10 @@ def test_model(model, model_name, X_test, y_test, scorer):
         X_test: Test set features.
         y_test: True labels for the test set.
         scorer (callable): Scoring function with signature `scorer(y_true, y_score)`
+
     Return:
-        None. Prints the computed score to stdout.
+        None. Prints the computed score.
     """
-  y_preds = model.predict_proba(X_test)[:, -1]
-  score   = scorer(y_test, y_preds)
-  print(f"Score of {model_name} on Test Set: {score:.3f}")
+    y_preds = model.predict_proba(X_test)[:, -1]
+    score   = scorer(y_test, y_preds)
+    print(f"PR-AUC of {model_name} on Test Set: {score:.3f}")
