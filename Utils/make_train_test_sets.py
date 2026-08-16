@@ -18,8 +18,8 @@ def make_train_test_sets(path:str, target_variable="is_fraud", test_size=0.3, ra
     )
     ## Reset indices after splitting
     X_train = X_train.reset_index(drop=True)
-    y_train = y_train.reset_index(drop=True)
     X_test  = X_test.reset_index(drop=True)
+    y_train = y_train.reset_index(drop=True)
     y_test  = y_test.reset_index(drop=True)
     
     return X_train, X_test, y_train, y_test
