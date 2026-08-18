@@ -34,7 +34,8 @@ def cross_validate(model, model_name, X, y, cat_features, save_model_path, score
         X_v = process_features(X_v, cat_features)
         
         # Fits appropriate cloned model
-        cloned_model = clone(model)
+        if model_name == "catboost": cloned_model = CatBoostClassifier(**model.get_params())
+        else: cloned_model = clone(model)
 
         if model_name == "lgbm":
             cloned_model.fit(
