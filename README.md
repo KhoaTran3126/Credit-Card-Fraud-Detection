@@ -22,7 +22,7 @@ With only 1.7% positive cases, plain accuracy is a trap (98.3% for guessing "not
 
 ## 🧪 The Approach
 
-1. Train **LightGBM**, **XGBoost**, and **CatBoost**, each hyperparameter-tuned across 5 folds with out-of-fold (OOF) predictions.
+1. Train **LightGBM**, **XGBoost**, and **CatBoost**, each hyperparameter-tuned across 5 stratified folds with out-of-fold (OOF) predictions.
 2. Interpret each model with **feature importance** and **SHAP** analysis.
 3. Combine models two ways: a **weighted average ensemble** and a **stacked logistic-regression meta-model**.
 4. Stress-test both blends across **15 random seeds** to see which one is genuinely better, not just lucky.
@@ -55,13 +55,13 @@ All three models land in a tight, consistent band where no single learner domina
 | Ensemble | 0.3462 | 0.0070 | 2.04% | 0.3376 | 0.3619 |
 | **Stacking** | **0.3528** | 0.0064 | 1.83% | 0.3390 | 0.3669 |
 
-**Head-to-head:** stacking beat the weighted ensemble in **13 of 15 seeds**, with a mean lift of **+0.0066 AP** (median +0.0050). It's not a blowout, but it's a consistent, low-variance edge with the meta-learner is squeezing out real signal from how the three base models *disagree* and not just averaging their opinions.
+**Head-to-head:** stacking beat the weighted ensemble in **13 of 15 seeds**, with a mean lift of **+0.0066 AP** (median +0.0050). 
 
 ---
 
 ## 🔍 What Actually Drives the Predictions
 
-Across LightGBM, XGBoost, and CatBoost, the same handful of features keep showing up at the top — a good sign that the models are converging on genuine fraud signal rather than noise:
+Across LightGBM, XGBoost, and CatBoost, the same handful of features keep showing up at the top, indicating that the models are converging on genuine fraud signal rather than noise:
 
 - **`cvv_retry_count`** and **`velocity_score`**: behavioral red flags, consistently the top 2-3 features everywhere
 - **`merchant_risk_score`**: a strong, monotonic driver of fraud probability
@@ -102,13 +102,13 @@ Across LightGBM, XGBoost, and CatBoost, the same handful of features keep showin
 </tr>
 </table>
 
-**Two distinct "shapes" of risk signal emerge from the dependence panels** (`Images/SHAP_results/LGBM_shap_panels.png`, `XGB_shap_panels.png`, `CatBoost_shap_panels.png`):
+**Two distinct "shapes" of risk signal emerge from the dependence panels**:
 
-- *Trip-wire features* behave almost like on/off switches: `used_vpn`, `ip_country_mismatch`, `billing_shipping_mismatch`, and `is_new_merchant` sit near a SHAP value of 0 when false, then jump sharply positive the instant they flip to true, with very little in between. These are near-binary tells — a mismatch either exists or it doesn't, and when it does, the model treats it as a strong, almost independent vote for fraud.
+- *Trip-wire features* behave almost like on/off switches: `used_vpn`, `ip_country_mismatch`, `billing_shipping_mismatch`, and `is_new_merchant` sit near a SHAP value of 0 when false, then jump sharply positive the instant they flip to true, with very little in between. A mismatch either exists or it doesn't, and when it does, the model treats it as a strong, almost independent vote for fraud.
 - *Dose-response features* scale continuously with risk: `velocity_score` and `merchant_risk_score` show a smooth, near-linear climb in SHAP value as the underlying score rises, meaning the model isn't just thresholding these, it's using the full range of values to size its confidence.
 - `cvv_retry_count` is a hybrid of both — a discrete feature (0, 1, 2 retries) that nonetheless produces a clean *staircase*, with each additional retry adding a large, consistent chunk of fraud probability, making it behave like a graded trip-wire rather than a purely continuous score.
 - `auth_method` is quietly one of the more interesting features: transactions cleared with "No Authentication" carry a large positive SHAP value relative to every other method (3D Secure, Biometric, OTP, PIN), which cluster together near zero or slightly negative — the models have effectively learned that the *absence* of a real authentication step is itself the risk signal, not which specific method was used.
-- `card_age_months` and `time_of_day_hour` contribute smaller but directionally sensible effects: newer cards and very early/late transaction hours nudge risk upward, while older cards and mid-day hours pull it down — plausible proxies for account-tenure risk and off-hours fraud activity respectively.
+- `card_age_months` and `time_of_day_hour` contribute smaller but directionally sensible effects: newer cards and very early/late transaction hours nudge risk upward, while older cards and mid-day hours pull it down, serving as plausible proxies for account-tenure risk and off-hours fraud activity respectively.
 - The color-coded interactions are also informative: high `velocity_score` combined with high `cvv_retry_count` or `txn_count_last_24h` produces visibly larger SHAP jumps than either feature moving alone, suggesting the models have partially learned a compounding-risk pattern rather than treating each signal independently.
 
 ---
@@ -117,17 +117,17 @@ Across LightGBM, XGBoost, and CatBoost, the same handful of features keep showin
 
 <p align="center"><img src="Images/OOF_results/OOF_corr.png" width="700"/></p>
 
-The three models' OOF predictions correlate **0.92–0.95 (Pearson)** and **0.95–0.97 (Spearman)** with each other — they're largely learning the same underlying pattern. But correlation with the actual fraud label sits much lower (Pearson ~0.49–0.50, Spearman ~0.19–0.20). The gap between those two numbers is itself worth noting: Pearson correlation is pulled up by a relatively small number of very-high-confidence true positives that exert outsized leverage on a linear measure, while Spearman — which cares about relative ranking across all 20,000 transactions — shows a more sobering picture. Most of the "correct" ranking work is happening only at the extreme top of the score distribution, which is exactly what you'd expect at a 1.7% base rate: the model doesn't need to rank the bulk of clearly-legitimate transactions well, only the sliver near the decision boundary.
+The three models' OOF predictions correlate **0.92–0.95 (Pearson)** and **0.95–0.97 (Spearman)** with each other, indicating they are largely learning the same underlying pattern. But correlation with the actual fraud label sits much lower (Pearson ~0.49–0.50, Spearman ~0.19–0.20). The gap between those two numbers is itself worth noting: Pearson correlation is pulled up by a relatively small number of very-high-confidence true positives that exert outsized leverage on a linear measure, while Spearman, which cares about relative ranking across all 20,000 transactions, is more modest. Most of the "correct" ranking work is happening only at the extreme top of the score distribution, which is exactly what you'd expect at a 1.7% base rate: the model doesn't need to rank the bulk of clearly-legitimate transactions well but only the sliver near the decision boundary.
 
 <p align="center"><img src="Images/OOF_results/OOF_pairwise.png" width="800"/></p>
 
-The pairwise scatter plots add a layer the correlation table alone can't show: **systematic bias between models, not just noise.** Points cluster along the diagonal in bulk, but with visible asymmetric fanning — in the LightGBM-vs-XGBoost and LightGBM-vs-CatBoost panels, a large share of points sit *above* the diagonal, meaning XGBoost and CatBoost tend to assign meaningfully higher probabilities than LightGBM does to the same transactions, especially in the mid-to-high probability range. LightGBM behaves more conservatively across the board. This kind of consistent directional disagreement — rather than random scatter — is precisely the kind of structure a stacking meta-model can learn to correct for, which helps explain why stacking outperforms a static weighted average.
+The pairwise scatter plots add a layer the correlation table alone can't show: **systematic bias between models, not just noise.** Points cluster along the diagonal in bulk, but with visible asymmetric fanning — in the LightGBM-vs-XGBoost and LightGBM-vs-CatBoost panels, a large share of points sit *above* the diagonal, meaning XGBoost and CatBoost tend to assign meaningfully higher probabilities than LightGBM does to the same transactions, especially in the mid-to-high probability range. LightGBM behaves more conservatively across the board. This kind of consistent directional disagreement, rather than random scatter, is precisely the kind of structure a stacking meta-model can learn to correct for, which helps explain why stacking outperforms a static weighted average.
 
 <p align="center"><img src="Images/OOF_results/OOF_distributions.png" width="800"/></p>
 
-The strip plots make the separation (and its limits) concrete. Median predicted probability for actual non-fraud transactions sits close to zero for all three models (roughly 0.02–0.04), while the median for actual fraud cases is far higher, being around 0.22 for LightGBM, 0.30 for XGBoost, and 0.36 for CatBoost — a 7-to-18x gap between classes depending on the model. CatBoost's noticeably higher fraud-class median lines up with it also posting the strongest individual test AP (0.345), suggesting it's not just ranking fraud cases correctly more often but doing so with greater confidence.
+The strip plots make the separation (and its limits) concrete. Median predicted probability for actual non-fraud transactions sits close to zero for all three models (roughly 0.02–0.04), while the median for actual fraud cases is far higher, being around 0.22 for LightGBM, 0.30 for XGBoost, and 0.36 for CatBoost, being a 7-to-18x gap between classes depending on the model. CatBoost's noticeably higher fraud-class median lines up with it also posting the strongest individual test AP (0.345), suggesting it's not just ranking fraud cases correctly more often but also doing so with greater confidence.
 
-That said, the overlap is still substantial and worth being honest about: a meaningful cluster of true fraud cases sits scored below 0.2 across all three models — the "hard" fraud cases that look statistically similar to legitimate transactions on these features — while a long tail of legitimate transactions still scores above 0.4–0.6. This 0.1–0.4 probability band is where the real operational tension lives, and it's exactly the region a business would need to study closely when setting a deployment threshold, since it contains the bulk of both the false negatives being missed and the false positives that would need manual review.
+That said, the overlap is still substantial and worth being honest about: a meaningful cluster of true fraud cases sits scored below 0.2 across all three models: the "hard" fraud cases that look statistically similar to legitimate transactions on these features, while a long tail of legitimate transactions still scores above 0.4–0.6. This 0.1–0.4 probability band is where the real operational tension lives, and it's exactly the region a business would need to study closely when setting a deployment threshold, since it contains the bulk of both the false negatives being missed and the false positives that would need manual review.
 
 ---
 
@@ -137,8 +137,8 @@ That said, the overlap is still substantial and worth being honest about: a mean
 - **No single boosted-tree model wins outright**: LightGBM, XGBoost, and CatBoost land within ~0.03 AP of each other, which is exactly why blending them helps.
 - **Stacking > simple weighted averaging**, consistently, though the gain is modest (~2% relative improvement). The meta-learner is extracting a bit of extra signal from *how* the base models disagree.
 - **The 2026-native fraud signal works**: `is_ai_generated_scam_attempt` isn't just a novelty column but shows real, consistent SHAP impact.
-- **XGBoost spreads its bets, LightGBM and CatBoost concentrate theirs**: XGBoost's flatter importance profile (top feature at just 9.6% vs. ~21% for the others) is a structural difference, not just noise, and it's a likely contributor to why the ensemble/stack benefits from including it despite its lower standalone AP.
-- **Risk features split into two behavioral types**: near-binary "trip-wires" (`used_vpn`, `ip_country_mismatch`, `billing_shipping_mismatch`, `is_new_merchant`) that jump sharply the moment they're triggered, versus continuous "dose-response" signals (`velocity_score`, `merchant_risk_score`) that scale smoothly with risk, being a distinction worth preserving in any future feature engineering.
+- **XGBoost spreads its bets, LightGBM and CatBoost concentrate theirs**: XGBoost's flatter importance profile (top feature at just 9.6% vs. ~21% for the others) is a structural difference and it's a likely contributor to why the ensemble/stack benefits from including it despite its lower standalone AP.
+- **Risk features split into two behavioral types**: binary features (`used_vpn`, `ip_country_mismatch`, `billing_shipping_mismatch`, `is_new_merchant`) that jump sharply the moment they're triggered, versus continuous signals (`velocity_score`, `merchant_risk_score`) that scale smoothly with risk, being a distinction worth preserving in any future feature engineering.
 - **Transaction metadata is largely dead weight**: `card_type`, `channel`, `device_type`, and `day_of_week` sit near-zero across all three models, making them strong candidates to drop for a leaner production feature set.
 - **Model agreement is high in relative ranking, low in absolute correlation with the label**: the Pearson/Spearman gap against `y_train` (~0.49 vs ~0.20) is a reminder that this is fundamentally a rare-event ranking problem: the models agree strongly with each other, but only a small top slice of predictions carries the real class-separating signal.
 - **There's real, visible headroom in the 0.1–0.4 probability band**: the OOF distribution overlap shows neither the false negatives nor the false positives are noise; they cluster in an identifiable range, which is where threshold tuning and calibration work (see Future Work) would have the most practical impact.
@@ -153,10 +153,9 @@ That said, the overlap is still substantial and worth being honest about: a mean
 - **Feature engineering**: interaction terms (`cvv_retry_count × velocity_score`), rolling/behavioral aggregates per customer or merchant, and anomaly-detection scores (Isolation Forest, autoencoder reconstruction error) as extra model inputs.
 - **Probability calibration**: apply Platt scaling or isotonic regression so predicted probabilities are trustworthy for downstream risk scoring, not just good for ranking.
 - **Repeated/nested cross-validation**: tighten the seed-to-seed variance already observed (CV ≈ 2%) with repeated stratified folds for more robust model selection.
-- **Drift monitoring**: since fraud tactics (like AI-generated scams) evolve quickly, plan for periodic retraining and monitoring of feature distributions in production.
 
 ---
 
 ## 🌟 Closing Note
 
-What started as three independently tuned boosted-tree models ended up as a genuinely interpretable and well-agreeing fraud detection pipeline. one where a risk analyst could look at the top SHAP drivers and immediately recognize real fraud behavior and not abstract components. Stacking nudged performance past simple ensembling in a consistent, low-variance way, and the roadmap above has plenty of runway left. For a rare-event problem starting at a 1.7% base rate, getting predicted-fraud probabilities to separate this cleanly and to explain *why* is a solid foundation to build on. 🎉
+What started as three independently tuned boosted-tree models ended up as a genuinely interpretable and well-agreeing fraud detection pipeline. one where a risk analyst could look at the top SHAP drivers and immediately recognize real fraud behavior and not abstract components. Stacking nudged performance past simple ensembling in a consistent, low-variance way, and the roadmap above has plenty of runway left. For a rare-event problem starting at a 1.7% base rate, getting predicted-fraud probabilities to separate this cleanly and to explain *why* is a solid foundation to build on. 
